@@ -54,6 +54,7 @@ final class Concealer27: ObservableObject {
             logger.error("MenuBarClientCore assertions are unavailable, so items will not be hidden")
             return
         }
+        warnIfNotRegisteredCopy()
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             observers.append(workspaceCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -134,6 +135,25 @@ final class Concealer27: ObservableObject {
             }
             .store(in: &cancellables)
         update()
+    }
+
+    /// Logs a warning when this is not the copy LaunchServices resolves for Ice's bundle identifier.
+    ///
+    /// Reported for other assertion-based hiders on macOS 27 (brentc22/stash): an ad hoc signed
+    /// copy that is not the registered one, such as a build run from DerivedData while an older
+    /// Ice sits in /Applications, has its own status item removed while an assertion is live.
+    private func warnIfNotRegisteredCopy() {
+        guard
+            let bundleID = Bundle.main.bundleIdentifier,
+            let registered = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        else {
+            return
+        }
+        let current = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
+        guard registered.resolvingSymlinksInPath().standardizedFileURL != current else {
+            return
+        }
+        logger.warning("Running from \(current.path, privacy: .public), but LaunchServices resolves \(bundleID, privacy: .public) to \(registered.path, privacy: .public): Ice's own icon may not be drawn while items are hidden. Install this copy in /Applications")
     }
 
     /// Derives what to conceal from Ice's sections and applies it.
